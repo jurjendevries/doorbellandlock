@@ -1,0 +1,152 @@
+/* This code can be pasted in a new project in https://build.particle.io/ */
+/* Function prototypes -------------------------------------------------------*/
+int tinkerDigitalRead(String pin);
+int tinkerDigitalWrite(String command);
+
+//Doorlock D7
+int doorlock = D7;
+
+//Doorbell DAC A6
+int pinDoorbutton = DAC;
+int TimerPushMsgEpoc = 0;
+int timeNow = 0;
+int vanTijd = 2030;
+int totTijd = 430;
+int millDelay = 5000;
+int ringTime = 500;
+//Active Relay D0
+int relay_0 = D0;
+
+
+// Status to send message only once
+int lastStatus = 1;
+
+/* This function is called once at start up ----------------------------------*/
+void setup()
+{
+    
+        pinMode(pinDoorbutton, INPUT_PULLUP);
+	pinMode(relay_0, OUTPUT);
+    digitalWrite(relay_0, LOW);
+    Time.zone(1);
+    TimerPushMsgEpoc = Time.now();
+	//Setup the Tinker application here
+	//Register all the Tinker functions
+	Particle.function("digitalread", tinkerDigitalRead);
+	Particle.function("digitalwrite", tinkerDigitalWrite);
+
+
+//IFTTT integration https://www.hackster.io/keithmitchell/blink-a-led-on-a-photon-using-the-ifttt-button-a92c16
+//We set the doorlock D7 pin mode to output
+    pinMode(doorlock, OUTPUT);
+//We "Subscribe" to our IFTTT event called doorlock so that we get events for it 
+    Particle.subscribe("doorlocker", myHandler, MY_DEVICES);
+
+
+}
+
+/* This function loops forever --------------------------------------------*/
+void loop() {
+    if(digitalRead(pinDoorbutton)==LOW) {
+        dingdong();
+        //while (digitalRead(pinDoorbutton) == LOW);
+    }
+    else {
+        lastStatus = 1;
+    }
+}
+
+/* This function sends a message to the Particle webhook with the name 'pushbulletname' which you can create and manage at https://console.particle.io/integrations */
+
+void pushmessage() {
+        Particle.publish("pushbulletname", "This is the doorbell.", 60, PRIVATE);
+        lastStatus = 0;
+}
+
+void dingdong() {
+    timeNow = Time.format(Time.now(),"%H%M").toInt();
+    if (timeNow <= vanTijd && timeNow >= totTijd) {
+    };
+    if ((Time.now() - TimerPushMsgEpoc) >= 15 ) {
+        TimerPushMsgEpoc = Time.now();
+    }
+    delay(ringTime); //Time that the bell rings
+    digitalWrite(relay_0, LOW);
+    delay(millDelay);
+}
+
+
+
+/*******************************************************************************
+ * Function Name  : tinkerDigitalRead
+ * Description    : Reads the digital value of a given pin
+ * Input          : Pin
+ * Output         : None.
+ * Return         : Value of the pin (0 or 1) in INT type
+                    Returns a negative number on failure
+ *******************************************************************************/
+int tinkerDigitalRead(String pin)
+{
+	//convert ascii to integer
+	int pinNumber = pin.charAt(1) - '0';
+	//Sanity check to see if the pin numbers are within limits
+	if (pinNumber< 0 || pinNumber >7) return -1;
+
+	if(pin.startsWith("D"))
+	{
+		pinMode(pinNumber, INPUT_PULLDOWN);
+		return digitalRead(pinNumber);
+	}
+	else if (pin.startsWith("A"))
+	{
+		pinMode(pinNumber+10, INPUT_PULLDOWN);
+		return digitalRead(pinNumber+10);
+	}
+	return -2;
+}
+
+/*******************************************************************************
+ * Function Name  : tinkerDigitalWrite
+ * Description    : Sets the specified pin HIGH or LOW
+ * Input          : Pin and value
+ * Output         : None.
+ * Return         : 1 on success and a negative number on failure
+ *******************************************************************************/
+int tinkerDigitalWrite(String command)
+{
+	bool value = 0;
+	//convert ascii to integer
+	int pinNumber = command.charAt(1) - '0';
+	//Sanity check to see if the pin numbers are within limits
+	if (pinNumber< 0 || pinNumber >7) return -1;
+
+	if(command.substring(3,7) == "HIGH") value = 1;
+	else if(command.substring(3,6) == "LOW") value = 0;
+	else return -2;
+
+	if(command.startsWith("D"))
+	{
+		pinMode(pinNumber, OUTPUT);
+		digitalWrite(pinNumber, value);
+		return 1;
+	}
+	else if(command.startsWith("A"))
+	{
+		pinMode(pinNumber+10, OUTPUT);
+		digitalWrite(pinNumber+10, value);
+		return 1;
+	}
+	else return -3;
+}
+
+//The function that handles the doorlocker event from IFTTT
+void myHandler(const char *event, const char *data){
+    // We'll turn the door pin on
+    digitalWrite(doorlock, HIGH);
+    
+    // We'll leave it on for 10 seconds...
+    delay(10000);
+    
+    // Then we'll turn it off...
+    digitalWrite(doorlock, LOW);
+}
